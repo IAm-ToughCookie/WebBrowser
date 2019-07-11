@@ -3,8 +3,8 @@ import os
 import json
 
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-                             QLineEdit, QTabWidget, QTabBar, QFrame, QStackedLayout, QComboBox)
-from PyQt5.QtGui import QIcon, QWindow, QImage
+                             QLineEdit, QTabWidget, QTabBar, QFrame, QStackedLayout, QComboBox, QShortcut)
+from PyQt5.QtGui import QIcon, QWindow, QImage, QKeySequence
 from PyQt5.QtCore import *
 from PyQt5.QtWebEngineWidgets import *
 
@@ -23,9 +23,12 @@ class AddressBar(QLineEdit):
 class App(QFrame):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AS-Browser")
+        self.setWindowTitle("Browser")
+
+        self.setBaseSize(1366, 768)
+        self.setMinimumSize(1366, 768)
         self.create_app()
-        self.resize(1366, 768)
+        self.setWindowIcon(QIcon("logo.png"))
 
     # noinspection PyAttributeOutsideInit
     def create_app(self):
@@ -37,9 +40,16 @@ class App(QFrame):
         self.tabbar = QTabBar(movable=True, tabsClosable=True)
         self.tabbar.tabCloseRequested.connect(self.close_tab)
         self.tabbar.tabBarClicked.connect(self.switch_tab)
-        self.tabbar.setDrawBase(False)
-
         self.tabbar.setCurrentIndex(0)
+        self.tabbar.setDrawBase(False)
+        self.tabbar.setLayoutDirection(Qt.LeftToRight)
+        self.tabbar.setElideMode(Qt.ElideLeft)
+
+        self.shortcut_new_tab = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.shortcut_new_tab.activated.connect(self.add_tab)
+
+        self.shortcut_reload = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.shortcut_reload.activated.connect(self.reload_page)
 
         # Keep track of tabs
         self.tab_count = 0
@@ -47,6 +57,7 @@ class App(QFrame):
 
         # Create Address Bar
         self.toolbar = QWidget()
+        self.toolbar.setObjectName("toolbar")
         self.toolbar_layout = QHBoxLayout()
         self.addressbar = AddressBar()
         self.add_tab_button = QPushButton("+")
@@ -106,6 +117,7 @@ class App(QFrame):
 
         self.tabs[i].content.titleChanged.connect(lambda: self.set_tab_content(i, "title"))
         self.tabs[i].content.iconChanged.connect(lambda: self.set_tab_content(i, "icon"))
+        self.tabs[i].content.urlChanged.connect(lambda: self.set_tab_content(i, "url"))
 
         # Add webView to tabs layout
         self.tabs[i].layout.addWidget(self.tabs[i].content)
@@ -133,9 +145,12 @@ class App(QFrame):
         self.tab_count += 1
 
     def switch_tab(self, i):
-        tab_data = self.tabbar.tabData(i)["object"]
-        tab_content = self.findChild(QWidget, tab_data)
-        self.container.layout.setCurrentWidget(tab_content)
+        if self.tabbar.tabData(i):
+            tab_data = self.tabbar.tabData(i)["object"]
+            tab_content = self.findChild(QWidget, tab_data)
+            self.container.layout.setCurrentWidget(tab_content)
+            new_url = tab_content.content.url().toString()
+            self.addressbar.setText(new_url)
 
     def browse_to(self):
         text = self.addressbar.text()
@@ -160,6 +175,13 @@ class App(QFrame):
         count = 0
         running = True
 
+        current_tab = self.tabbar.tabData(self.tabbar.currentIndex())["object"]
+
+        if current_tab == tab_name and type == "url":
+            new_url = self.findChild(QWidget, tab_name).content.url().toString()
+            self.addressbar.setText(new_url)
+            return False
+
         while running:
             tab_data_name = self.tabbar.tabData(count)
 
@@ -176,7 +198,6 @@ class App(QFrame):
                     self.tabbar.setTabIcon(count, new_icon)
                     running = False
             else:
-                print(count)
                 count += 1
 
     def go_back(self):
@@ -204,5 +225,8 @@ class App(QFrame):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = App()
+
+    with open("stylesheet.css", "r") as style:
+        app.setStyleSheet(style.read())
 
     sys.exit(app.exec())
